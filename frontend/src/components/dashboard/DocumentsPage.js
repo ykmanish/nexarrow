@@ -185,13 +185,13 @@ export default function DocumentsPage({ token }) {
   return (
     <div className="mx-auto max-w-7xl space-y-5">
       <SectionTitle title="Documents" subtitle="Store and manage your important files." action={<Btn onClick={() => { setEditDoc(null); setShowModal(true); }} className="gap-2"><Plus className="h-4 w-4" />Add document</Btn>} />
-      <div className="rounded-[32px] border-[#ebe3db] bg-[#fcfaf7] p-4 md:p-5">
+      <div className="rounded-[32px]  bg-[#fcfaf7] p-4 md:p-5">
         <div className="grid gap-4 lg:grid-cols-4">
           <div className="space-y-2">
-            <label className="block text-[11px] font-700 uppercase tracking-[0.14em] text-[#9d938b]">Search</label>
-            <div className="flex h-[52px] items-center gap-3 rounded-[20px] border border-[#d9d4cf] bg-white px-4">
-              <Search className="h-4 w-4 text-[#9f958c]" />
-              <input placeholder="Search by name..." value={search.name} onChange={(e) => setSearch((s) => ({ ...s, name: e.target.value }))} className="w-full bg-transparent text-sm font-500 text-[#342d29] outline-none placeholder:text-[#b0a79f]" />
+            <label className="block text-xs font-600 text-[#5f6368]">Search</label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-[#80868b]" />
+              <input placeholder="Search by name..." value={search.name} onChange={(e) => setSearch((s) => ({ ...s, name: e.target.value }))} className="h-[48px] w-full rounded-lg bg-[#f1f3f4] py-2.5 pl-10 pr-3 text-sm font-500 text-[#3c4043] outline-none placeholder:text-[#9aa0a6]" />
             </div>
           </div>
           <StyledSelect label="Tag" value={search.tag} onChange={(next) => setSearch((s) => ({ ...s, tag: next }))} options={tagOptions} placeholder="All tags" />

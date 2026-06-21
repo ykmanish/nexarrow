@@ -1,5 +1,6 @@
-const express = require("express");
+
 const mongoose = require("mongoose");
+const express = require("express");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -8,6 +9,73 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const { google } = require("googleapis");
+
+async function appendToGoogleSheet(data) {
+  try {
+    const auth = new google.auth.GoogleAuth({
+      keyFile: path.join(__dirname, 'arbitrage.json'),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    
+    const client = await auth.getClient();
+    const sheets = google.sheets({ version: 'v4', auth: client });
+    
+    const spreadsheetId = '1fdRd2sZvU-UKO3XEqFDJFWhH7UIVHlt31WwBkvoSGkk';
+    
+    const formatDate = (d) => {
+      if (!d) return '';
+      const date = new Date(d);
+      return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+    };
+
+    const formatPurchases = (purchases) => {
+      if (!purchases || !purchases.length) return '';
+      return purchases.map(p => `${p.sellerName}: ${p.volumeEuro} EUR @ ${p.rateEuro} = ${p.usdcAmount.toFixed(2)} USDC`).join(' | ');
+    };
+
+    const formatSales = (sales) => {
+      if (!sales || !sales.length) return '';
+      return sales.map(s => `${s.buyerName}: ${s.usdtAmount.toFixed(2)} USDT @ ${s.rateInr} = ${s.volumeInr} INR`).join(' | ');
+    };
+
+    const values = [
+      [
+        formatDate(data.date), // Date
+        data.personName || '', // Person Name
+        data.remittancePlatform || '', // Remittance Platform
+        data.remittedBankPlatform || '', // Bank/Platform
+        data.volume || 0, // Remitting Volume (INR)
+        data.euroRate || 0, // EUR Rate
+        data.remittanceFees || 0, // Remittance Fees (INR)
+        data.totalReceivedEuro || 0, // Received EUR
+        data.usdcBuyingPlatform || '', // USDC Buying Platform
+        formatDate(data.usdcBuyingDate), // USDC Buying Date
+        formatPurchases(data.usdcPurchases), // USDC Purchases
+        data.usdtSellingAccountName || '', // USDT Selling Account Name
+        formatDate(data.usdtSellingDate), // USDT Selling Date
+        formatSales(data.usdtSales), // USDT Sales
+        data.totalAmountInr || 0, // Total USDT Sold (INR)
+        data.profitBeforeTax || 0, // Gross Profit
+        data.estoniaTax || 0, // Estonia Tax
+        data.indiaTax || 0, // India Tax
+        data.netProfit || 0, // Net Profit
+        data.notes || '' // Notes
+      ],
+    ];
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: "'Arbitrage Transactions'!A:T", // Append to the correct sheet
+      valueInputOption: 'USER_ENTERED',
+      insertDataOption: 'INSERT_ROWS',
+      requestBody: { values },
+    });
+    console.log("Successfully appended to Google Sheet");
+  } catch (error) {
+    console.error("Error appending to Google Sheet:", error.message || error);
+  }
+}
 
 require("dotenv").config();
 
@@ -137,6 +205,9 @@ const Balance = mongoose.model("Balance", balanceSchema);
 const arbitroSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   date: { type: Date, default: Date.now },
+  remittancePlatform: { type: String, default: "" },
+  personName: { type: String, default: "" },
+  remittedBankPlatform: { type: String, default: "" },
   volume: { type: Number, required: true },
   euroRate: { type: Number, required: true },
   remittanceFees: { type: Number, default: 0 },
@@ -146,6 +217,23 @@ const arbitroSchema = new mongoose.Schema({
   usdtPurchaseRateEuro: { type: Number, required: true },
   usdtReceived: { type: Number },
   usdtSellingRateInr: { type: Number, required: true },
+  usdcBuyingPlatform: { type: String, default: "" },
+  bankUsedForBuying: { type: String, default: "" },
+  usdcBuyingDate: { type: Date },
+  usdcPurchases: [{
+    rateEuro: { type: Number, required: true },
+    sellerName: { type: String, required: true },
+    volumeEuro: { type: Number, required: true },
+    usdcAmount: { type: Number, default: 0 },
+  }],
+  usdtSellingAccountName: { type: String, default: "" },
+  usdtSellingDate: { type: Date },
+  usdtSales: [{
+    rateInr: { type: Number, required: true },
+    buyerName: { type: String, required: true },
+    volumeInr: { type: Number, required: true },
+    usdtAmount: { type: Number, default: 0 },
+  }],
   totalAmountInr: { type: Number },
   profitBeforeTax: { type: Number },
   estoniaTax: { type: Number },
@@ -653,22 +741,43 @@ app.get("/api/arbitro", authMiddleware, async (req, res) => {
 
 app.post("/api/arbitro", authMiddleware, async (req, res) => {
   try {
-    const { volume, euroRate, remittanceFees, usdtPurchaseRateEuro, usdtSellingRateInr, date, notes, visibleToAll, visibleToUsers } = req.body;
+    const {
+      volume, euroRate, remittanceFees, date, notes, visibleToAll, visibleToUsers,
+      remittancePlatform, personName, remittedBankPlatform, usdcBuyingPlatform,
+      usdcBuyingDate, usdcPurchases, usdtSellingAccountName, usdtSellingDate, usdtSales
+    } = req.body;
 
-    if (!volume || !euroRate || !usdtPurchaseRateEuro || !usdtSellingRateInr)
+    if (!volume || !euroRate || !remittancePlatform || !personName || !remittedBankPlatform ||
+        !usdcBuyingPlatform || !Array.isArray(usdcPurchases) || !usdcPurchases.length ||
+        !usdtSellingAccountName || !Array.isArray(usdtSales) || !usdtSales.length)
       return res.status(400).json({ success: false, message: "Required fields missing" });
 
     const vol = Number(volume);
     const eurRate = Number(euroRate);
     const remFeesInr = Number(remittanceFees) || 0;
-    const usdtBuyEur = Number(usdtPurchaseRateEuro);
-    const usdtSellInr = Number(usdtSellingRateInr);
+    const purchases = usdcPurchases.map((row) => ({
+      rateEuro: Number(row.rateEuro), sellerName: String(row.sellerName || "").trim(),
+      volumeEuro: Number(row.volumeEuro), usdcAmount: Number(row.volumeEuro) / Number(row.rateEuro),
+    }));
+    const sales = usdtSales.map((row) => {
+      const rateInr = Number(row.rateInr);
+      // Keep old clients compatible while making USDT amount the source of truth.
+      const usdtAmount = Number(row.usdtAmount) || (Number(row.volumeInr) / rateInr);
+      return {
+        rateInr, buyerName: String(row.buyerName || "").trim(), usdtAmount,
+        volumeInr: +(usdtAmount * rateInr).toFixed(2),
+      };
+    });
+
+    if (purchases.some((row) => !row.rateEuro || !row.sellerName || !row.volumeEuro) ||
+        sales.some((row) => !row.rateInr || !row.buyerName || !row.usdtAmount || !row.volumeInr))
+      return res.status(400).json({ success: false, message: "Complete every purchase and sale row" });
 
     const totalEuro = vol / eurRate;
     const remFeesEuro = remFeesInr / eurRate;
     const euroAfterFees = totalEuro - remFeesEuro;
-    const usdtReceived = euroAfterFees / usdtBuyEur;
-    const totalAmountInr = usdtReceived * usdtSellInr;
+    const usdtReceived = purchases.reduce((sum, row) => sum + row.usdcAmount, 0);
+    const totalAmountInr = sales.reduce((sum, row) => sum + row.volumeInr, 0);
     const profitBeforeTax = totalAmountInr - vol;
     const estoniaTax = profitBeforeTax > 0 ? profitBeforeTax * 0.20 : 0;
     const indiaTax = profitBeforeTax > 0 ? profitBeforeTax * 0.30 : 0;
@@ -679,15 +788,25 @@ app.post("/api/arbitro", authMiddleware, async (req, res) => {
     const record = await Arbitro.create({
       userId: req.user._id,
       date: date ? new Date(date) : new Date(),
+      remittancePlatform,
+      personName: String(personName).trim(),
+      remittedBankPlatform: String(remittedBankPlatform).trim(),
       volume: vol,
       euroRate: eurRate,
       remittanceFees: remFeesInr,
       totalEuroBeforeFees: +totalEuro.toFixed(4),
       remittanceFeesEuro: +remFeesEuro.toFixed(4),
       totalReceivedEuro: +euroAfterFees.toFixed(4),
-      usdtPurchaseRateEuro: usdtBuyEur,
+      usdtPurchaseRateEuro: purchases[0].rateEuro,
       usdtReceived: +usdtReceived.toFixed(4),
-      usdtSellingRateInr: usdtSellInr,
+      usdtSellingRateInr: sales[0].rateInr,
+      usdcBuyingPlatform,
+      bankUsedForBuying: String(remittedBankPlatform).trim(),
+      usdcBuyingDate: usdcBuyingDate ? new Date(usdcBuyingDate) : new Date(),
+      usdcPurchases: purchases,
+      usdtSellingAccountName: String(usdtSellingAccountName).trim(),
+      usdtSellingDate: usdtSellingDate ? new Date(usdtSellingDate) : new Date(),
+      usdtSales: sales,
       totalAmountInr: +totalAmountInr.toFixed(2),
       profitBeforeTax: +profitBeforeTax.toFixed(2),
       estoniaTax: +estoniaTax.toFixed(2),
@@ -711,6 +830,10 @@ app.post("/api/arbitro", authMiddleware, async (req, res) => {
     }
 
     await addNotification(req.user._id, `Arbitro entry logged — Net Profit: ₹${netProfit.toFixed(2)}`, "info", "arbitro", record._id);
+    
+    // Append to Google Sheet asynchronously
+    appendToGoogleSheet(record);
+
     res.status(201).json({ success: true, record });
   } catch (err) {
     console.error(err);

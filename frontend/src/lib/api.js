@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://records.nexarrow.eu/api";
 const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || "6LdvlwQtAAAAAFWoFgs3dyTfDJJUjP2SW3YZv16H";
 
 export const api = async (endpoint, options = {}, token = null) => {

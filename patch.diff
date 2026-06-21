@@ -1,0 +1,285 @@
+diff --git a/frontend/src/app/globals.css b/frontend/src/app/globals.css
+index a09a293..91a39eb 100644
+--- a/frontend/src/app/globals.css
++++ b/frontend/src/app/globals.css
+@@ -3,7 +3,12 @@
+ @variant dark (&:where(.dark, .dark *));
+ 
+ body {
+-  background-color: #fdfaf5;
++  background-color: #f1f3f4;
++  font-family: "Google Sans", "Google Sans Text", "Geist", Arial, sans-serif;
++}
++
++button, input, textarea, select {
++  font-family: inherit;
+ }
+ /* Hide scrollbar for Chrome, Safari, and Edge */
+ ::-webkit-scrollbar {
+@@ -20,6 +25,145 @@ button {
+ select {
+   cursor: pointer;
+ }
++
++/* Compact neutral workspace treatment inspired by issue-tracking tools. */
++.arbitro-linear {
++  color: #292a2e;
++  scroll-behavior: smooth;
++}
++
++.arbitro-linear label {
++  color: #66676b !important;
++  font-size: 12px;
++}
++
++.google-ui .arbitro-linear input,
++.google-ui .arbitro-linear select,
++.google-ui .arbitro-linear textarea,
++.google-ui .finance-page input,
++.google-ui .finance-page select,
++.google-ui .finance-page textarea,
++.arbitro-linear input,
++.arbitro-linear select,
++.arbitro-linear textarea,
++.finance-page input,
++.finance-page select,
++.finance-page textarea {
++  border: 1px solid #d5d5d8 !important;
++  border-radius: 8px !important;
++  background-color: #ffffff !important;
++}
++
++.google-ui .arbitro-linear input[readonly],
++.google-ui .arbitro-linear textarea[readonly],
++.google-ui .finance-page input[readonly],
++.google-ui .finance-page textarea[readonly],
++.arbitro-linear input[readonly],
++.arbitro-linear textarea[readonly],
++.finance-page input[readonly],
++.finance-page textarea[readonly] {
++  background-color: #f3eee8 !important;
++}
++
++.arbitro-linear table thead {
++  background: #f1f1f2;
++}
++
++.arbitro-linear table tbody tr {
++  transition: background-color 120ms ease;
++}
++
++.arbitro-linear table tbody tr:hover {
++  background: #f5f5f6 !important;
++}
++
++.arbitro-linear button,
++.arbitro-linear article,
++.arbitro-linear input {
++  -webkit-tap-highlight-color: transparent;
++}
++
++/* Shared Google-style workspace language for every authenticated module. */
++.google-ui {
++  font-family: "Google Sans", "Google Sans Text", "Geist", Arial, sans-serif;
++  letter-spacing: -.005em;
++}
++
++.google-ui [class*="rounded-[30px]"],
++.google-ui [class*="rounded-[32px]"] {
++  border: 0 !important;
++  border-radius: 16px !important;
++  background: #fff !important;
++}
++
++.google-ui [class*="bg-[#fcfaf7]"],
++.google-ui [class*="bg-[#f8f4ef]"] {
++  background-color: #fff !important;
++}
++
++.google-ui [class*="border-[#ebe3db]"],
++.google-ui [class*="border-[#e8e0d8]"],
++.google-ui [class*="border-[#eee6df]"] {
++  border-color: #dadce0 !important;
++}
++
++.google-ui input,
++.google-ui textarea,
++.google-ui select {
++  border: 0 !important;
++  border-radius: 8px !important;
++  background: #f1f3f4 !important;
++  color: #3c4043 !important;
++}
++
++.google-ui input:focus,
++.google-ui textarea:focus,
++.google-ui select:focus {
++  border-color: #8ab4f8 !important;
++}
++
++.google-ui [class*="text-[#201c1a]"],
++.google-ui [class*="text-[#2f2926]"] {
++  color: #202124 !important;
++}
++
++.google-ui [class*="text-[#8f857d]"],
++.google-ui [class*="text-[#8e857d]"],
++.google-ui [class*="text-[#9d938b]"] {
++  color: #80868b !important;
++}
++
++.google-ui table thead {
++  background: #f8f9fa;
++}
++
++.google-ui table tbody tr {
++  border-color: #eef0f1 !important;
++  transition: background-color 120ms ease;
++}
++
++.google-ui table tbody tr:hover {
++  background: #f8f9fa !important;
++}
++
++/* Cards and content surfaces are intentionally borderless; buttons retain their outlines. */
++.google-ui *:not(button) {
++  border-color: transparent !important;
++}
++
++.google-ui :where(article, section, aside, header, footer, table) {
++  border-width: 0 !important;
++}
++
++.google-ui * {
++  box-shadow: none !important;
++  text-shadow: none !important;
++}
++
++/* The only elevated surfaces: menus that are currently open. */
++.floating-control-menu {
++  box-shadow: 0 14px 34px rgba(60, 64, 67, .18) !important;
++}
+ .scrollbar-hide {
+   -ms-overflow-style: none; /* IE and Edge */
+   scrollbar-width: none; /* Firefox */
+@@ -600,7 +744,6 @@ input[type="range"]::-webkit-slider-thumb {
+   border-radius: 50%;
+   background: #111827; /* gray-900 */
+   border: 2px solid white;
+-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+   cursor: pointer;
+ }
+ 
+@@ -619,7 +762,6 @@ input[type="range"]::-moz-range-thumb {
+   border-radius: 50%;
+   background: #111827;
+   border: 2px solid white;
+-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+   cursor: pointer;
+ }
+ 
+@@ -877,104 +1019,3 @@ input[type="range"]::-moz-range-thumb {
+     }
+   }
+ }
+-
+-/* Article Content Styling */
+-.article-content {
+-  @apply text-gray-800 dark:text-gray-200;
+-}
+-
+-.article-content h1 {
+-  @apply text-4xl font-bold mt-8 mb-4 text-gray-900 dark:text-white;
+-}
+-
+-.article-content h2 {
+-  @apply text-3xl font-bold mt-8 mb-4 text-gray-900 dark:text-white;
+-}
+-
+-.article-content h3 {
+-  @apply text-2xl font-bold mt-6 mb-3 text-gray-900 dark:text-white;
+-}
+-
+-.article-content h4 {
+-  @apply text-xl font-bold mt-4 mb-2 text-gray-900 dark:text-white;
+-}
+-
+-.article-content h5 {
+-  @apply text-lg font-bold mt-4 mb-2 text-gray-900 dark:text-white;
+-}
+-
+-.article-content h6 {
+-  @apply text-base font-bold mt-4 mb-2 text-gray-900 dark:text-white;
+-}
+-
+-.article-content p {
+-  @apply mb-4 leading-relaxed;
+-}
+-
+-.article-content a {
+-  @apply text-blue-600 dark:text-blue-400 hover:underline;
+-}
+-
+-.article-content ul {
+-  @apply list-disc list-inside mb-4 space-y-1;
+-}
+-
+-.article-content ol {
+-  @apply list-decimal list-inside mb-4 space-y-1;
+-}
+-
+-.article-content li {
+-  @apply mb-1;
+-}
+-
+-.article-content blockquote {
+-  @apply pl-4 border-l-4 border-gray-300 dark:border-gray-700 italic my-4 text-gray-600 dark:text-gray-400;
+-}
+-
+-.article-content pre {
+-  @apply bg-gray-100 dark:bg-[#1A1B1F] rounded-xl p-4 overflow-x-auto mb-4;
+-}
+-
+-.article-content code {
+-  @apply bg-gray-100 dark:bg-[#1A1B1F] px-1.5 py-0.5 rounded text-sm font-mono;
+-}
+-
+-.article-content pre code {
+-  @apply bg-transparent p-0;
+-}
+-
+-.article-content img {
+-  @apply max-w-full h-auto rounded-2xl my-6;
+-}
+-
+-.article-content table {
+-  @apply w-full border-collapse mb-4;
+-}
+-
+-.article-content th {
+-  @apply bg-gray-100 dark:bg-[#1A1B1F] px-4 py-2 text-left font-medium text-gray-900 dark:text-white;
+-}
+-
+-.article-content td {
+-  @apply border-t border-gray-200 dark:border-[#202227] px-4 py-2;
+-}
+-
+-.article-content hr {
+-  @apply my-8 border-gray-200 dark:border-[#202227];
+-}
+-
+-/* Print styles */
+-@media print {
+-  .article-content {
+-    @apply text-black;
+-  }
+-  
+-  .article-content a {
+-    @apply no-underline text-black;
+-  }
+-  
+-  .article-content pre,
+-  .article-content code {
+-    @apply bg-gray-100 text-black;
+-  }
+-}

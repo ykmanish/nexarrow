@@ -9,7 +9,7 @@ const SearchBar = () => (
     <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9e948b]" />
     <input 
       placeholder="Search or type a command" 
-      className="w-full rounded-full border border-[#e8e0d8] bg-[#fcfaf7] py-3 pl-11 pr-20 text-sm text-[#2f2926] outline-none placeholder:text-[#aba29a]" 
+    className="w-full rounded-xl border border-[#d4d4d7] bg-white py-2.5 pl-11 pr-20 text-sm text-[#2f3034] outline-none placeholder:text-[#999a9e] focus:border-[#9aabe9]"
     />
     <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-[#ece5de] bg-white px-2 py-1 text-[10px] font-700 text-[#91877f]">⌘ K</span>
   </div>
@@ -19,8 +19,8 @@ const SidebarItem = ({ active, icon, label, onClick, compact }) => (
   <button 
     onClick={onClick} 
     className={cn(
-      "flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-sm font-600 transition",
-      active ? "bg-[#2c2624] text-[#f8f4ee]" : "text-[#6d655e] hover:bg-[#f3ede7] hover:text-[#201c1a]",
+      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-600 transition",
+      active ? "bg-[#e8f0fe] text-[#1967d2]" : "text-[#5f6064] hover:bg-[#f1f3f4] hover:text-[#202124]",
       compact && "justify-center"
     )}
   >
@@ -46,7 +46,7 @@ const NotificationsDrawer = ({ isOpen, onClose, notifications, unreadCount, onMa
         onClick={onClose} 
       />
       <div className={cn(
-        "fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-[#fcfaf7] shadow-xl transition-transform duration-500 ease-out will-change-transform",
+        "fixed right-0 top-0 z-50 flex h-full w-full max-w-md flex-col bg-white transition-transform duration-500 ease-out will-change-transform",
         isOpen ? "translate-x-0" : "translate-x-full"
       )}>
         <div className="flex items-center justify-between border-b border-[#eee6df] px-5 py-4">
@@ -158,13 +158,13 @@ export default function DashboardLayout({ children, user, token, activeSection, 
   const stats = dashboardStats?.stats;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-zinc-100 text-[#201c1a]">
+    <div className="google-ui flex h-screen overflow-hidden bg-[#f1f3f4] text-[#202124]">
       {mobileSidebar && (
         <button className="fixed inset-0 z-40 bg-[#1e1a17]/35 lg:hidden" onClick={() => setMobileSidebar(false)} aria-label="Close sidebar" />
       )}
       
       <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-full flex-col border-[#e9e1d9] bg-[#fcfaf7] transition-all duration-300 lg:relative lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex h-full flex-col border-r border-[#dadce0] bg-white transition-all duration-300 lg:relative lg:translate-x-0",
         mobileSidebar ? "translate-x-0" : "-translate-x-full",
         sidebarOpen ? "w-[260px]" : "w-[88px]"
       )}>
@@ -224,7 +224,7 @@ export default function DashboardLayout({ children, user, token, activeSection, 
       </aside>
       
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className=" border-[#e9e1d9] bg-[#f7f3ee] px-4 py-4 md:px-6">
+        <header className="border-b border-[#dadce0] bg-white px-4 py-3 md:px-6">
           <div className="flex items-center gap-3">
             <button 
               className="rounded-full border border-[#e7dfd8] bg-[#fcfaf7] p-2 text-[#7e756e] lg:hidden" 
@@ -256,7 +256,7 @@ export default function DashboardLayout({ children, user, token, activeSection, 
           </div>
         </header>
         
-        <main className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
+        <main className="flex-1 overflow-y-auto bg-[#f1f3f4] px-4 py-5 md:px-6 md:py-6">
           
           
           {statsLoading && activeSection === "home" && (

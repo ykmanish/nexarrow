@@ -33,13 +33,13 @@ export const ToasterProvider = () => (
     toastOptions={{
       duration: 3200,
       style: {
-        fontFamily: "Inter, sans-serif",
+        fontFamily: '"Google Sans", "Google Sans Text", "Geist", Arial, sans-serif',
         fontSize: "14px",
         fontWeight: "600",
-        border: "1px solid #e7dfd8",
-        background: "#fcfaf7",
-        color: "#2f2926",
-        borderRadius: "16px",
+        border: "1px solid #dadce0",
+        background: "#ffffff",
+        color: "#202124",
+        borderRadius: "12px",
         padding: "12px 14px",
       },
       success: {
@@ -73,8 +73,8 @@ export const BrandHeader = ({ compact = false }) => (
 export const SectionTitle = ({ title, subtitle, action }) => (
   <div className="flex items-start justify-between gap-4">
     <div>
-      <h2 className="text-[30px] font-semibold small font-700 tracking-[-0.03em] text-[#201c1a]">{title}</h2>
-      {subtitle ? <p className="mt-1 text-sm text-[#857c75]">{subtitle}</p> : null}
+      <h2 className="text-[24px] font-semibold font-700 tracking-[-0.03em] text-[#202124]">{title}</h2>
+      {subtitle ? <p className="mt-1 text-[13px] text-[#77787c]">{subtitle}</p> : null}
     </div>
     {action}
   </div>
@@ -93,14 +93,14 @@ export const Modal = ({ open, onClose, title, children, size = "md", headerSlot 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button aria-label="Close modal backdrop" className="absolute inset-0 bg-[#1f1a17]/40" onClick={onClose} />
-      <div className={cn("relative w-full overflow-y-auto rounded-[28px] border border-[#e8e0d8] bg-[#fcfaf7] max-h-[90vh]", sizeMap[size])}>
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#eee6df] bg-[#fcfaf7]/95 px-6 py-5 backdrop-blur">
+      <button aria-label="Close modal backdrop" className="absolute inset-0 bg-[#303034]/25 backdrop-blur-[2px]" onClick={onClose} />
+      <div className={cn("relative w-full overflow-y-auto rounded-2xl bg-[#f7f7f8] max-h-[92vh]", sizeMap[size])}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#dedee0] bg-[#f7f7f8]/95 px-6 py-4 backdrop-blur">
           <div>
             <h2 className="text-lg font-700 text-[#201c1a]">{title}</h2>
             {headerSlot ? <div className="mt-2">{headerSlot}</div> : null}
           </div>
-          <button onClick={onClose} className="rounded-full border border-[#ebe4dd] bg-white p-2 text-[#7f766e] transition hover:bg-[#f6f1ec]">
+          <button onClick={onClose} className="rounded-lg border border-[#d8d8da] bg-white p-2 text-[#6f7074] transition hover:bg-[#ebebed]">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -136,7 +136,7 @@ export const Input = ({ label, error, className = "", ...props }) => (
     {label ? <label className="block text-sm font-600 text-[#5c554f]">{label}</label> : null}
     <input
       className={cn(
-        "w-full rounded-2xl border px-4 py-3 text-sm outline-none transition",
+        "w-full rounded-lg border px-3 py-2.5 text-sm outline-none transition",
         error ? "border-[#e7b4b4] bg-[#fff4f4] focus:border-[#d78282]" : "border-[#e8e0d8] bg-white focus:border-[#cfc3b8]",
         "placeholder:text-[#b3aaa2]",
         className
@@ -152,7 +152,7 @@ export const TextArea = ({ label, className = "", ...props }) => (
     {label ? <label className="block text-sm font-600 text-[#5c554f]">{label}</label> : null}
     <textarea
       className={cn(
-        "w-full rounded-2xl border border-[#e8e0d8] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#cfc3b8] placeholder:text-[#b3aaa2] resize-none",
+        "w-full rounded-lg border border-[#d5d5d8] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[#8a9fe8] focus:ring-2 focus:ring-[#9baded]/20 placeholder:text-[#a5a5a9] resize-none",
         className
       )}
       {...props}
@@ -162,7 +162,7 @@ export const TextArea = ({ label, className = "", ...props }) => (
 
 export const FilterField = ({ label, children, className = "" }) => (
   <div className={cn("space-y-2", className)}>
-    {label ? <label className="block text-[11px] font-700 uppercase tracking-[0.14em] text-[#9d938b]">{label}</label> : null}
+    {label ? <label className="block text-xs font-600 text-[#5f6368]">{label}</label> : null}
     {children}
   </div>
 );
@@ -181,7 +181,7 @@ export const StyledSelect = ({ label, value, onChange, options = [], placeholder
         <button
           type="button"
           onClick={() => setOpen((p) => !p)}
-          className="flex h-[52px] w-full items-center justify-between rounded-[20px] border border-[#d9d4cf] bg-white px-4 text-left text-sm font-500 text-[#312b27]"
+          className={cn("flex h-[48px] w-full items-center justify-between rounded-lg border bg-white px-3 text-left text-sm font-500 transition", open ? "border-[#a99df2] ring-2 ring-[#8c7cf0]/15" : "border-[#dadce0] hover:border-[#bdc1c6]", "text-[#3c4043]")}
         >
           <div className="flex items-center gap-3">
             <ChevronDown className="h-4 w-4 text-[#8f857d]" />
@@ -192,7 +192,7 @@ export const StyledSelect = ({ label, value, onChange, options = [], placeholder
           <div
             ref={menuRef}
             className={cn(
-              "absolute z-30 w-full overflow-hidden rounded-[14px] border border-[#cfc8c2] bg-white shadow-[0_10px_30px_rgba(34,29,25,0.08)]",
+              "floating-control-menu absolute z-30 w-full overflow-hidden rounded-2xl bg-white p-1.5",
               floating.vertical === "down" ? "top-[calc(100%+8px)]" : "bottom-[calc(100%+8px)]",
               floating.align === "left" ? "left-0" : "right-0"
             )}
@@ -206,7 +206,7 @@ export const StyledSelect = ({ label, value, onChange, options = [], placeholder
                   onClick={() => { onChange(opt.value); setOpen(false); }}
                   className={cn(
                     "flex w-full items-center px-4 py-2.5 text-left text-sm transition",
-                    active ? "bg-[#2e6dce] text-white" : "bg-white text-[#2f2926] hover:bg-[#f5f1ec]"
+                    active ? "rounded-xl bg-[#eeeaff] text-[#5d4ca4]" : "rounded-xl bg-white text-[#3c4043] hover:bg-[#f1f3f4]"
                   )}
                 >
                   {opt.label}
@@ -370,7 +370,7 @@ export const StyledDatePicker = ({ label, value, onChange, compact = false }) =>
         width: "320px",
         zIndex: 9999,
       }}
-      className="overflow-hidden rounded-2xl border border-[#e0d8d0] bg-white shadow-2xl"
+      className="floating-control-menu overflow-hidden rounded-2xl bg-white"
     >
       <div className="border-b border-[#f0e8e0] bg-gradient-to-r from-[#fcfaf7] to-white px-4 py-3">
         <div className="flex items-center justify-between">
@@ -385,7 +385,7 @@ export const StyledDatePicker = ({ label, value, onChange, compact = false }) =>
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showMonthSelect && "rotate-180")} />
               </button>
               {showMonthSelect && (
-                <div className="absolute left-0 top-full mt-1 z-[10000] w-32 rounded-xl border border-[#e0d8d0] bg-white p-2 shadow-lg">
+                <div className="floating-control-menu absolute left-0 top-full mt-1 z-[10000] w-32 rounded-xl bg-white p-2">
                   <div className="grid grid-cols-3 gap-1">
                     {months.map((month, idx) => (
                       <button
@@ -415,7 +415,7 @@ export const StyledDatePicker = ({ label, value, onChange, compact = false }) =>
                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showYearSelect && "rotate-180")} />
               </button>
               {showYearSelect && (
-                <div className="absolute left-0 top-full mt-1 z-[10000] max-h-48 w-28 overflow-y-auto rounded-xl border border-[#e0d8d0] bg-white p-2 shadow-lg">
+                <div className="floating-control-menu absolute left-0 top-full mt-1 z-[10000] max-h-48 w-28 overflow-y-auto rounded-xl bg-white p-2">
                   {years.map((year) => (
                     <button
                       key={year}
@@ -502,7 +502,7 @@ export const StyledDatePicker = ({ label, value, onChange, compact = false }) =>
                   "relative mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-500 transition-all",
                   !inCurrentMonth && "text-[#c0b8b0]",
                   inCurrentMonth && !isSelected && !isToday && "text-[#2f2926] hover:bg-[#f5f0eb]",
-                  isSelected && "bg-[#2c2624] text-white shadow-md",
+                  isSelected && "bg-[#2c2624] text-white",
                   isToday && !isSelected && "border-2 border-[#cfc3b8] bg-[#fefaf5] font-700"
                 )}
               >
@@ -545,9 +545,9 @@ export const StyledDatePicker = ({ label, value, onChange, compact = false }) =>
           type="button"
           onClick={() => setOpen((p) => !p)}
           className={cn(
-            "flex w-full items-center justify-between rounded-[20px] border border-[#d9d4cf] bg-white px-4 text-left transition-all hover:border-[#cfc3b8]",
+            "flex w-full items-center justify-between rounded-lg border border-[#d5d5d8] bg-white px-3 text-left transition-all hover:border-[#aaaab0]",
             compact ? "h-[48px]" : "h-[52px]",
-            open && "border-[#cfc3b8] ring-2 ring-[#cfc3b8]/20"
+            open && "border-[#a99df2] ring-2 ring-[#8c7cf0]/15"
           )}
         >
           <div className="flex items-center gap-3">
@@ -666,9 +666,9 @@ export const Spinner = ({ className = "h-5 w-5" }) => (
 
 export const Btn = ({ children, variant = "primary", loading, className = "", ...props }) => {
   const variants = {
-    primary: "bg-[#2c2624] text-[#f8f4ee] hover:bg-[#1f1b19] border-[#2c2624]",
-    secondary: "bg-[#f4efe8] text-[#3b3531] hover:bg-[#eee6de] border-[#e5ddd5]",
-    outline: "bg-white text-[#3b3531] hover:bg-[#f8f4ee] border-[#e7dfd8]",
+    primary: "bg-[#25262a] text-white hover:bg-[#111216] border-[#25262a]",
+    secondary: "bg-[#ededee] text-[#34353a] hover:bg-[#e1e1e3] border-[#d9d9dc]",
+    outline: "bg-white text-[#34353a] hover:bg-[#f1f1f2] border-[#d8d8da]",
     danger: "bg-[#b85555] text-white hover:bg-[#a04747] border-[#b85555]",
     success: "bg-[#5d7b58] text-white hover:bg-[#4f6a4b] border-[#5d7b58]",
     ghost: "bg-transparent text-[#5c554f] hover:bg-[#f3ede7] border-transparent",
@@ -677,7 +677,7 @@ export const Btn = ({ children, variant = "primary", loading, className = "", ..
   return (
     <button
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-600 transition disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-600 transition disabled:cursor-not-allowed disabled:opacity-60",
         variants[variant],
         className
       )}
@@ -691,32 +691,32 @@ export const Btn = ({ children, variant = "primary", loading, className = "", ..
 
 export const Badge = ({ children, color = "default" }) => {
   const colors = {
-    default: "bg-[#f4efe8] text-[#625b54]",
-    blue: "bg-[#e7ecff] text-[#5967aa]",
-    purple: "bg-[#efe8ff] text-[#7a62b7]",
-    green: "bg-[#e8f3e5] text-[#5d7b58]",
-    red: "bg-[#fdeaea] text-[#b85555]",
-    yellow: "bg-[#fff4dd] text-[#b08638]",
+    default: "bg-[#e8e8ea] text-[#55565a]",
+    blue: "bg-[#bfe2ff] text-[#245f85]",
+    purple: "bg-[#ddd1ff] text-[#684da7]",
+    green: "bg-[#bfe8b4] text-[#315f2d]",
+    red: "bg-[#ffd0d0] text-[#963f3f]",
+    yellow: "bg-[#ffe09a] text-[#735718]",
   };
   return <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-xs font-600 capitalize", colors[color])}>{children}</span>;
 };
 
 export const EmptyState = ({ icon, title, text, action }) => (
-  <div className="rounded-[28px] border border-[#ebe3db] bg-[#fcfaf7] px-6 py-14 text-center">
-    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f4efe8] text-[#7a726b]">{icon}</div>
-    <h3 className="text-base font-700 text-[#201c1a]">{title}</h3>
-    <p className="mx-auto mt-2 max-w-md text-sm text-[#8e857d]">{text}</p>
+  <div className="rounded-2xl border border-[#dadce0] bg-white px-6 py-12 text-center">
+    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#f1f3f4] text-[#5f6368]">{icon}</div>
+    <h3 className="text-base font-700 text-[#202124]">{title}</h3>
+    <p className="mx-auto mt-2 max-w-md text-sm text-[#80868b]">{text}</p>
     {action ? <div className="mt-5">{action}</div> : null}
   </div>
 );
 
 export const AuthLayout = ({ children, title, subtitle }) => (
-  <div className="min-h-screen flex justify-center items-center bg-[#f7f3ee] px-4 py-10">
+  <div className="google-ui min-h-screen flex justify-center items-center bg-[#f1f3f4] px-4 py-10">
     <div className="mx-auto max-w-md">
-      <div className="rounded-[32px] border-[#e9e1d9] bg-[#fcfaf7] p-8">
+      <div className="rounded-2xl bg-white p-8">
         <div className="mb-7 text-center">
-          <h1 className="text-[30px] font-700 tracking-[-0.04em] text-[#201c1a]">{title}</h1>
-          <p className="mt-2 text-sm text-[#887f77]">{subtitle}</p>
+          <h1 className="text-[30px] font-700 tracking-[-0.04em] text-[#202124]">{title}</h1>
+          <p className="mt-2 text-sm text-[#80868b]">{subtitle}</p>
         </div>
         {children}
       </div>
@@ -730,12 +730,12 @@ export const DetailGrid = ({ items, columns = 2 }) => (
       <div
         key={item.label}
         className={cn(
-          "rounded-2xl border px-4 py-4",
+          "rounded-xl border px-4 py-4",
           item.tone === "success" ? "border-[#d8e7d4] bg-[#edf6eb]" :
           item.tone === "danger" ? "border-[#f1d6d6] bg-[#fdf1f1]" :
           item.tone === "warning" ? "border-[#f2e1bb] bg-[#fff7e8]" :
-          item.tone === "feature" ? "border-[#e6ddd5] bg-[#f7f2ec]" :
-          "border-[#eee6df] bg-white"
+          item.tone === "feature" ? "border-[#d2e3fc] bg-[#f2f7ff]" :
+          "border-[#dadce0] bg-white"
         )}
       >
         <p className="text-[11px] font-700 uppercase tracking-[0.12em] text-[#9b9188]">{item.label}</p>

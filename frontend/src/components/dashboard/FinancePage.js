@@ -199,44 +199,31 @@ export default function FinancePage({ token }) {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 overflow-visible">
+    <div className="finance-page mx-auto max-w-7xl space-y-5 overflow-visible">
       <SectionTitle
         title="Finance"
         subtitle="Manage your deposits, withdrawals and balance. Transactions shared by others appear here."
         action={
           <div className="flex gap-2">
-            <Btn className="bg-cyan-500 text-white hover:bg-cyan-600" onClick={() => setShowDeposit(true)}>Deposit</Btn>
-            <Btn className="bg-red-500 text-white hover:bg-red-600" onClick={() => setShowWithdraw(true)}>Withdraw</Btn>
+            <Btn className="bg-cyan-500 border-none text-white hover:bg-cyan-600" onClick={() => setShowDeposit(true)}>Deposit</Btn>
+            <Btn className="bg-red-500 border-none text-white hover:bg-red-600" onClick={() => setShowWithdraw(true)}>Withdraw</Btn>
           </div>
         }
       />
 
       <div className="grid gap-4 lg:grid-cols-5">
-        <div className="rounded-[30px] border-[#ebe3db] bg-[#fcfaf7] p-5 lg:col-span-1">
-          <p className="text-xs font-700 uppercase  tracking-[0.12em] text-[#988d85]">Available balance</p>
-          <p className="mt-3 text-[32px] font-700  font-semibold small  text-[#201c1a]">{fmtCurrency(balance?.balance || 0)}</p>
-          <p className="mt-2 text-xs text-[#8f857d]">{balance?.currency || "INR"}</p>
-        </div>
-        <div className="rounded-[30px] border-[#ebe3db] bg-[#fcfaf7] p-5">
-          <p className="text-xs font-700 uppercase tracking-[0.12em] text-[#988d85]">Today deposits</p>
-          <p className="mt-3 text-2xl font-700 font-semibold small text-[#201c1a]">{fmtCurrency(balance?.today?.deposit?.total || 0)}</p>
-          <p className="mt-2 text-xs text-[#8f857d]">{balance?.today?.deposit?.count || 0} transactions</p>
-        </div>
-        <div className="rounded-[30px] border-[#ebe3db] bg-[#fcfaf7] p-5">
-          <p className="text-xs font-700 uppercase tracking-[0.12em] text-[#988d85]">Today withdrawals</p>
-          <p className="mt-3 text-2xl font-700 font-semibold small text-[#201c1a]">{fmtCurrency(balance?.today?.withdrawal?.total || 0)}</p>
-          <p className="mt-2 text-xs text-[#8f857d]">{balance?.today?.withdrawal?.count || 0} transactions</p>
-        </div>
-        <div className="rounded-[30px] border-[#ebe3db] bg-[#fcfaf7] p-5">
-          <p className="text-xs font-700 uppercase tracking-[0.12em] text-[#988d85]">Monthly deposits</p>
-          <p className="mt-3 text-2xl font-700 font-semibold small text-[#201c1a]">{fmtCurrency(balance?.month?.deposit?.total || 0)}</p>
-          <p className="mt-2 text-xs text-[#8f857d]">{balance?.month?.deposit?.count || 0} transactions</p>
-        </div>
-        <div className="rounded-[30px] border-[#ebe3db] bg-[#fcfaf7] p-5">
-          <p className="text-xs font-700 uppercase tracking-[0.12em] text-[#988d85]">Monthly withdrawals</p>
-          <p className="mt-3 text-2xl font-700 font-semibold small text-[#201c1a]">{fmtCurrency(balance?.month?.withdrawal?.total || 0)}</p>
-          <p className="mt-2 text-xs text-[#8f857d]">{balance?.month?.withdrawal?.count || 0} transactions</p>
-        </div>
+      {[
+        { label: "Available balance", value: fmtCurrency(balance?.balance || 0), detail: balance?.currency || "INR", color: "#826ef0", bg: "#f0edff", icon: "₹" },
+        { label: "Today deposits", value: fmtCurrency(balance?.today?.deposit?.total || 0), detail: `${balance?.today?.deposit?.count || 0} transactions`, color: "#64bd6a", bg: "#eaf6ec", icon: "↘" },
+        { label: "Today withdrawals", value: fmtCurrency(balance?.today?.withdrawal?.total || 0), detail: `${balance?.today?.withdrawal?.count || 0} transactions`, color: "#df6b6b", bg: "#fceaea", icon: "↗" },
+        { label: "Monthly deposits", value: fmtCurrency(balance?.month?.deposit?.total || 0), detail: `${balance?.month?.deposit?.count || 0} transactions`, color: "#53bbdb", bg: "#e7f6fa", icon: "↘" },
+        { label: "Monthly withdrawals", value: fmtCurrency(balance?.month?.withdrawal?.total || 0), detail: `${balance?.month?.withdrawal?.count || 0} transactions`, color: "#a57cf2", bg: "#f4edff", icon: "↗" },
+        ].map((card, index) => (
+          <div key={card.label} className={cn("rounded-xl border border-[#d8d8da] bg-white p-4", index === 0 ? "lg:col-span-1" : "")}>
+            <div className="flex items-center justify-between border-b border-[#d8d8da] pb-3"><div className="flex items-center gap-2"><span className="flex h-7 w-7 items-center justify-center rounded-lg text-sm" style={{ backgroundColor: card.bg, color: card.color }}>{card.icon}</span><p className="text-sm font-700 text-[#45464c]">{card.label}</p></div><span className="text-xs text-[#aaaab0]">•••</span></div>
+            <div className="flex items-end justify-between gap-3 pt-3"><div className="min-w-0"><p className="truncate text-xl font-700 text-[#292a2f]">{card.value}</p><p className="mt-1 text-xs text-[#98999e]">{card.detail}</p></div></div>
+          </div>
+        ))}
       </div>
 
       <div className="overflow-visible rounded-[30px] border-[#ebe3db] bg-[#fcfaf7]">
