@@ -10,7 +10,7 @@ import ForgotPasswordPage from "./ForgotPasswordPage";
 import ResetPasswordPage from "./ResetPasswordPage";
 import { RECAPTCHA_SITE_KEY } from "@/lib/api";
 
-export default function AuthRoute({ page }) {mkdir .github
+export default function AuthRoute({ page }) {
 
   const router = useRouter();
   useEffect(() => {
