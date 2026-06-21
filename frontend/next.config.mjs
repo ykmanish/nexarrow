@@ -3,6 +3,9 @@ const nextConfig = {
   /* config options here */
   devIndicators: false,
   reactCompiler: true,
+  turbopack: {
+    root: process.cwd(),
+  },
 };
 
 export default nextConfig;

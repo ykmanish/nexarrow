@@ -4,18 +4,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, Tooltip, AreaChart, Area } from "recharts";
 import { api } from "@/lib/api";
 import { fmt, fmtCurrency, fmtDate, cn, formatDateInput } from "@/lib/utils";
+import { REMITTANCE_PLATFORMS } from "@/lib/remittance";
+import FloatingSelect from "../ui/FloatingSelect";
+import { FileEdit, Pencil, Save } from "lucide-react";
 import {
   SectionTitle, Btn, Plus, Filter, StyledDatePicker, Spinner, Badge, Eye, Trash2,
   ChevronLeft, ChevronRight, ChevronDown, Check, Modal, TextArea, ConfirmModal, DetailGrid,
   Sparkles, VisibilitySelector
 } from "../ui/SharedComponents";
 
-const REMITTANCE_PLATFORMS = [
-  { value: "Western Union", logo: "/platforms/wu.png" },
-  { value: "DBS", logo: "/platforms/dbs.jpg" },
-  { value: "IndusInd", logo: "/platforms/indusind.png" },
-  { value: "Niyo Global", logo: "/platforms/niyo.png" },
-];
 const BUYING_PLATFORMS = [
   { value: "Binance", logo: "/platforms/binance.png" },
   { value: "Bybit", logo: "/platforms/bybit.png" },
@@ -23,12 +20,21 @@ const BUYING_PLATFORMS = [
 const emptyPurchase = () => ({ rateEuro: "", sellerName: "", volumeEuro: "" });
 const emptySale = () => ({ rateInr: "", buyerName: "", usdtAmount: "" });
 const initialForm = () => ({
-  remittancePlatform: "Western Union", personName: "", date: formatDateInput(new Date()),
+  remittancePlatform: "Western Union", remitPersonId: "", personName: "", date: formatDateInput(new Date()),
   remittedBankPlatform: "", euroRate: "", volume: "", remittanceFees: "",
   usdcBuyingPlatform: "Binance", usdcBuyingDate: formatDateInput(new Date()),
   usdcPurchases: [emptyPurchase()], usdtSellingAccountName: "",
   usdtSellingDate: formatDateInput(new Date()), usdtSales: [emptySale()], notes: ""
 });
+const formFromSource = (source) => source ? ({
+  ...initialForm(), ...source,
+  remitPersonId: String(source.remitPersonId?._id || source.remitPersonId || ""),
+  date: formatDateInput(source.date || new Date()),
+  usdcBuyingDate: formatDateInput(source.usdcBuyingDate || new Date()),
+  usdtSellingDate: formatDateInput(source.usdtSellingDate || new Date()),
+  usdcPurchases: source.usdcPurchases?.length ? source.usdcPurchases : [emptyPurchase()],
+  usdtSales: source.usdtSales?.length ? source.usdtSales : [emptySale()],
+}) : initialForm();
 
 const inputClass = "w-full rounded-lg border border-[#d5d5d8] bg-white px-3 py-2.5 text-sm outline-none transition focus:border-[#8a9fe8] focus:ring-2 focus:ring-[#9baded]/20";
 
@@ -77,6 +83,12 @@ function PlatformSelect({ label, options, value, onChange }) {
   </div>;
 }
 
+function RemitPersonSelect({ people, value, onChange }) {
+  return <FloatingSelect label="Person name" value={value} onChange={onChange} showInitials
+    placeholder={people.length ? "Select a person" : "Add a person in RemitBalance first"}
+    options={people.map((person) => ({ value: person._id, label: person.name }))} />;
+}
+
 function RepeatableRows({ type, rows, onChange }) {
   const purchase = type === "purchase";
   const update = (index, key, value) => onChange(rows.map((row, i) => i === index ? { ...row, [key]: value } : row));
@@ -108,13 +120,33 @@ function RepeatableRows({ type, rows, onChange }) {
   </div>;
 }
 
-const ArbitroModal = ({ open, onClose, token, onSaved }) => {
-  const [form, setForm] = useState(initialForm);
+const ArbitroModal = ({ open, onClose, token, onSaved, record = null, draft = null }) => {
+  const source = draft?.data || record;
+  const [form, setForm] = useState(() => formFromSource(source));
   const [loading, setLoading] = useState(false);
-  const [visibility, setVisibility] = useState("all");
-  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const visibilitySource = draft || record;
+  const [visibility, setVisibility] = useState(() => visibilitySource?.visibleToAll === false ? "users" : "all");
+  const [selectedUsers, setSelectedUsers] = useState(() => (visibilitySource?.visibleToUsers || []).map((item) => String(item?._id || item)));
   const [users, setUsers] = useState([]);
-  useEffect(() => { if (open) api("/users", {}, token).then((d) => setUsers(d.users || [])).catch(() => {}); }, [open, token]);
+  const [remitPeople, setRemitPeople] = useState([]);
+  useEffect(() => {
+    if (!open) return;
+    Promise.all([api("/users", {}, token), api("/remit-balance", {}, token)])
+      .then(([userData, remitData]) => {
+        setUsers(userData.users || []);
+        let people = remitData.people || [];
+        if (source?.remitPersonId && !people.some((person) => String(person._id) === String(source.remitPersonId?._id || source.remitPersonId))) {
+          people = [...people, { _id: String(source.remitPersonId?._id || source.remitPersonId), name: source.personName || "Shared remitter", platforms: [source.remittancePlatform] }];
+        }
+        setRemitPeople(people);
+        setForm((current) => {
+          const eligible = people.filter((person) => person.platforms.includes(current.remittancePlatform));
+          const selected = eligible.find((person) => person._id === current.remitPersonId) || eligible[0];
+          return { ...current, remitPersonId: selected?._id || "", personName: selected?.name || "" };
+        });
+      }).catch(() => toast.error("Failed to load RemitBalance people"));
+  }, [open, token, source]);
 
   const preview = useMemo(() => {
     const volume = Number(form.volume || 0), rate = Number(form.euroRate || 0), fees = Number(form.remittanceFees || 0);
@@ -128,27 +160,47 @@ const ArbitroModal = ({ open, onClose, token, onSaved }) => {
   }, [form]);
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+  const eligiblePeople = remitPeople.filter((person) => person.platforms.includes(form.remittancePlatform));
+  const changePlatform = (value) => {
+    const eligible = remitPeople.filter((person) => person.platforms.includes(value));
+    const selected = eligible.find((person) => person._id === form.remitPersonId) || eligible[0];
+    setForm((current) => ({ ...current, remittancePlatform: value, remitPersonId: selected?._id || "", personName: selected?.name || "" }));
+  };
+  const changePerson = (personId) => {
+    const person = remitPeople.find((item) => item._id === personId);
+    setForm((current) => ({ ...current, remitPersonId: personId, personName: person?.name || "" }));
+  };
   const submit = async (e) => {
     e.preventDefault(); setLoading(true);
     try {
-      await api("/arbitro", { method: "POST", body: JSON.stringify({
+      await api(record ? `/arbitro/${record._id}` : "/arbitro", { method: record ? "PUT" : "POST", body: JSON.stringify({
         ...form, volume: Number(form.volume), euroRate: Number(form.euroRate),
         remittanceFees: Number(form.remittanceFees || 0), visibleToAll: visibility === "all",
-        visibleToUsers: visibility === "users" ? selectedUsers : []
+        visibleToUsers: visibility === "users" ? selectedUsers : [], sourceDraftId: draft?._id
       }) }, token);
-      toast.success("Arbitro transaction saved"); setForm(initialForm()); setVisibility("all"); setSelectedUsers([]); onSaved();
+      toast.success(record ? "Arbitro transaction updated" : "Arbitro transaction saved"); onSaved();
     } catch (err) { toast.error(err.message); } finally { setLoading(false); }
   };
 
-  return <Modal open={open} onClose={onClose} title="Add arbitro transaction" size="xl"
-    headerSlot={<div className="flex gap-2"><Badge color="yellow">Data filling</Badge><Badge color="purple"><Sparkles className="mr-1 h-3 w-3" />Live tally</Badge></div>}>
+  const saveDraft = async () => {
+    setDraftLoading(true);
+    try {
+      await api(draft ? `/arbitro/drafts/${draft._id}` : "/arbitro/drafts", { method: draft ? "PUT" : "POST", body: JSON.stringify({
+        data: form, visibleToAll: visibility === "all", visibleToUsers: visibility === "users" ? selectedUsers : []
+      }) }, token);
+      toast.success(draft ? "Draft updated" : "Draft saved to MongoDB"); onSaved();
+    } catch (err) { toast.error(err.message); } finally { setDraftLoading(false); }
+  };
+
+  return <Modal open={open} onClose={onClose} title={record ? "Edit arbitro transaction" : draft ? "Continue arbitro draft" : "Add arbitro transaction"} size="xl"
+    headerSlot={<div className="flex gap-2"><Badge color={draft ? "purple" : "yellow"}>{draft ? "Draft" : record ? "Editing" : "Data filling"}</Badge><Badge color="purple"><Sparkles className="mr-1 h-3 w-3" />Live tally</Badge></div>}>
     <form onSubmit={submit} className="arbitro-linear space-y-4">
      
       <section className="rounded-xl border border-[#d8d8da] bg-[#f1f1f2] p-4">
         <h3 className="mb-4"><span className="inline-flex rounded-lg bg-[#bfe2ff] px-3 py-1.5 text-xs font-700 text-[#245f85]">● &nbsp; INR to EUR remittance</span></h3>
         <div className="grid gap-4 md:grid-cols-2">
-          <PlatformSelect label="Remittance platform" options={REMITTANCE_PLATFORMS} value={form.remittancePlatform} onChange={(value) => set("remittancePlatform", value)} />
-          <Field label="Person name" value={form.personName} onChange={(e) => set("personName", e.target.value)} placeholder="Remitter's full name" />
+          <PlatformSelect label="Remittance platform" options={REMITTANCE_PLATFORMS} value={form.remittancePlatform} onChange={changePlatform} />
+          <RemitPersonSelect people={eligiblePeople} value={form.remitPersonId} onChange={changePerson} />
           <StyledDatePicker label="Remitting date" value={form.date} onChange={(v) => set("date", v)} compact />
           <Field label="Remitted to bank account / platform" value={form.remittedBankPlatform} onChange={(e) => set("remittedBankPlatform", e.target.value)} placeholder="Bank or account platform" />
           <Field label="Today's EUR rate in INR" type="number" value={form.euroRate} onChange={(e) => set("euroRate", e.target.value)} placeholder="e.g. 101.25" />
@@ -195,7 +247,7 @@ const ArbitroModal = ({ open, onClose, token, onSaved }) => {
 
       <TextArea label="Notes" rows={2} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Optional transaction notes…" />
       <VisibilitySelector value={visibility} onChange={setVisibility} users={users} selectedUsers={selectedUsers} onUsersChange={setSelectedUsers} />
-      <div className="flex gap-3 border-t border-[#eee6df] pt-4"><Btn type="button" variant="secondary" onClick={onClose} className="flex-1">Cancel</Btn><Btn type="submit" loading={loading} className="flex-1">Save transaction</Btn></div>
+      <div className="flex flex-wrap gap-3 border-t border-[#eee6df] pt-4"><Btn type="button" variant="secondary" onClick={onClose} className="min-w-32 flex-1">Cancel</Btn>{!record && <Btn type="button" variant="outline" loading={draftLoading} onClick={saveDraft} className="min-w-40 flex-1 gap-2"><Save className="h-4 w-4" />{draft ? "Update draft" : "Save draft"}</Btn>}<Btn type="submit" loading={loading} className="min-w-44 flex-1">{record ? "Save changes" : draft ? "Publish transaction" : "Save transaction"}</Btn></div>
     </form>
   </Modal>;
 };
@@ -230,7 +282,7 @@ function TransactionChart({ record }) {
   </div>;
 }
 
-function TransactionCard({ record, owner, onView, onDelete, index }) {
+function TransactionCard({ record, owner, onView, onEdit, onDelete, index }) {
   const platform = [...REMITTANCE_PLATFORMS, ...BUYING_PLATFORMS].find((item) => item.value === record.remittancePlatform);
   const margin = Number(record.volume) ? (Number(record.netProfit || 0) / Number(record.volume)) * 100 : 0;
   return <motion.article initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .3, delay: Math.min(index * .04, .24) }}
@@ -256,23 +308,37 @@ function TransactionCard({ record, owner, onView, onDelete, index }) {
       <div className="flex gap-3 text-xs text-[#77787e]"><span>In {fmtCurrency(record.volume)}</span><span>Out {fmtCurrency(record.totalAmountInr)}</span></div>
       <div className="flex gap-1 opacity-60 transition group-hover:opacity-100">
         <button type="button" onClick={(e) => { e.stopPropagation(); onView(); }} className="rounded-lg p-2 hover:bg-[#efeff2]" title="View"><Eye className="h-4 w-4" /></button>
-        <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(); }} className="rounded-lg p-2 text-[#b95a5a] hover:bg-[#fff0f0]" title="Delete"><Trash2 className="h-4 w-4" /></button>
+        {record.canEdit && <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(); }} className="rounded-lg p-2 text-[#6556b9] hover:bg-[#eeeaff]" title="Edit"><Pencil className="h-4 w-4" /></button>}
+        {record.canDelete && <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(); }} className="rounded-lg p-2 text-[#b95a5a] hover:bg-[#fff0f0]" title="Delete"><Trash2 className="h-4 w-4" /></button>}
       </div>
     </div>
   </motion.article>;
 }
 
+function DraftCard({ draft, onEdit, onDelete }) {
+  const data = draft.data || {};
+  const platform = REMITTANCE_PLATFORMS.find((item) => item.value === data.remittancePlatform);
+  const completed = [data.remitPersonId, data.remittedBankPlatform, data.euroRate, data.volume, data.usdcBuyingPlatform, data.usdtSellingAccountName].filter(Boolean).length;
+  const progress = Math.round((completed / 6) * 100);
+  return <motion.article initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="overflow-hidden rounded-2xl border border-dashed border-[#b9afe5] bg-gradient-to-br from-[#faf8ff] to-white p-4">
+    <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eee9ff]">{platform ? <img src={platform.logo} alt="" className="h-7 w-7 rounded-lg object-contain" /> : <FileEdit className="h-5 w-5 text-[#7362c5]" />}</div><div className="min-w-0"><h3 className="truncate text-sm font-700 text-[#37343f]">{data.personName || "Untitled transaction"}</h3><p className="mt-0.5 text-xs text-[#918b9d]">{data.remittancePlatform || "Platform not selected"} · Updated {fmtDate(draft.updatedAt)}</p></div></div><Badge color="purple">Draft</Badge></div>
+    <div className="mt-4"><div className="mb-1.5 flex justify-between text-xs"><span className="text-[#85808e]">Form progress</span><strong className="text-[#6655b8]">{progress}%</strong></div><div className="h-2 overflow-hidden rounded-full bg-[#e8e4f4]"><div className="h-full rounded-full bg-gradient-to-r from-[#7462d1] to-[#a184ef]" style={{ width: `${progress}%` }} /></div></div>
+    <div className="mt-4 flex items-center justify-between border-t border-[#e8e3f3] pt-3"><div><p className="text-xs text-[#8e8998]">Owner: {draft.userId?.name || "You"}</p>{draft.updatedBy?.name && <p className="mt-0.5 text-[11px] text-[#aaa5b1]">Last edited by {draft.updatedBy.name}</p>}</div>{draft.canEdit ? <div className="flex gap-1"><button type="button" onClick={onEdit} className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-600 text-[#6354b1] hover:bg-[#eee9ff]"><Pencil className="h-4 w-4" />Continue</button><button type="button" onClick={onDelete} className="rounded-lg p-2 text-[#b95a5a] hover:bg-[#fff0f0]" title="Delete draft"><Trash2 className="h-4 w-4" /></button></div> : <Badge>View only</Badge>}</div>
+  </motion.article>;
+}
+
 export default function ArbitroPage({ token }) {
-  const [records, setRecords] = useState([]), [loading, setLoading] = useState(true), [showModal, setShowModal] = useState(false);
-  const [viewRecord, setViewRecord] = useState(null), [deleteRecord, setDeleteRecord] = useState(null), [deleting, setDeleting] = useState(false);
+  const [records, setRecords] = useState([]), [drafts, setDrafts] = useState([]), [loading, setLoading] = useState(true), [showModal, setShowModal] = useState(false);
+  const [viewRecord, setViewRecord] = useState(null), [editRecord, setEditRecord] = useState(null), [editDraft, setEditDraft] = useState(null), [deleteRecord, setDeleteRecord] = useState(null), [deleteDraft, setDeleteDraft] = useState(null), [deleting, setDeleting] = useState(false);
   const [page, setPage] = useState(1), [totalPages, setTotalPages] = useState(1), [filter, setFilter] = useState({ startDate: "", endDate: "" });
   const loadRecords = useCallback(async (p = 1) => { setLoading(true); try {
     const q = new URLSearchParams({ page: String(p), limit: "15" }); if (filter.startDate) q.set("startDate", filter.startDate); if (filter.endDate) q.set("endDate", filter.endDate);
-    const d = await api(`/arbitro?${q}`, {}, token); setRecords(d.records || []); setTotalPages(d.totalPages || 1); setPage(p);
+    const [d, draftData] = await Promise.all([api(`/arbitro?${q}`, {}, token), api("/arbitro/drafts", {}, token)]); setRecords(d.records || []); setDrafts(draftData.drafts || []); setTotalPages(d.totalPages || 1); setPage(p);
   } catch { toast.error("Failed to load arbitro records"); } finally { setLoading(false); } }, [token, filter]);
-  useEffect(() => { loadRecords(1); }, [loadRecords]);
+  useEffect(() => { const timer = setTimeout(() => loadRecords(1), 0); return () => clearTimeout(timer); }, [loadRecords]);
   const owner = (r) => r.userId?.name || "You";
   const remove = async () => { setDeleting(true); try { await api(`/arbitro/${deleteRecord._id}`, { method: "DELETE" }, token); toast.success("Record deleted"); setDeleteRecord(null); loadRecords(page); } catch (e) { toast.error(e.message); } finally { setDeleting(false); } };
+  const removeDraft = async () => { setDeleting(true); try { await api(`/arbitro/drafts/${deleteDraft._id}`, { method: "DELETE" }, token); toast.success("Draft deleted"); setDeleteDraft(null); loadRecords(page); } catch (e) { toast.error(e.message); } finally { setDeleting(false); } };
   const analytics = useMemo(() => {
     const totals = records.reduce((sum, record) => ({
       volume: sum.volume + Number(record.volume || 0), sold: sum.sold + Number(record.totalAmountInr || 0),
@@ -308,16 +374,20 @@ export default function ArbitroPage({ token }) {
       <div className="flex items-end gap-2"><Btn onClick={() => loadRecords(1)} className="flex-1 gap-2"><Filter className="h-4 w-4" />Filter</Btn><Btn variant="secondary" onClick={() => setFilter({ startDate: "", endDate: "" })}>Clear</Btn></div>
     </div></div>
 
+    {!!drafts.length && <section className="space-y-3"><div className="flex items-center justify-between px-1"><div><h2 className="flex items-center gap-2 text-base font-700 text-[#34353a]"><FileEdit className="h-4 w-4 text-[#7160c1]" />Saved drafts</h2><p className="mt-0.5 text-xs text-[#929398]">MongoDB-backed drafts can be continued by anyone when shared with Everyone.</p></div><Badge color="purple">{drafts.length} draft{drafts.length === 1 ? "" : "s"}</Badge></div><div className="grid gap-4 lg:grid-cols-2">{drafts.map((draft) => <DraftCard key={draft._id} draft={draft} onEdit={() => setEditDraft(draft)} onDelete={() => setDeleteDraft(draft)} />)}</div></section>}
+
     <div className="flex items-center justify-between px-1"><div><h2 className="text-base font-700 text-[#34353a]">Transaction analysis</h2><p className="mt-0.5 text-xs text-[#929398]">Every card includes its own remittance, sale and profit chart.</p></div><Badge color="purple">{records.length} records</Badge></div>
     {loading ? <div className="flex justify-center rounded-2xl border border-[#d2d2d5] bg-white p-12"><Spinner className="h-6 w-6" /></div> : !records.length ? <div className="rounded-2xl border border-[#d2d2d5] bg-white p-12 text-center text-sm text-[#8f857d]">No transactions yet.</div> : <div className="grid gap-4 lg:grid-cols-2">
-      {records.map((record, index) => <TransactionCard key={record._id} record={record} owner={owner} index={index} onView={() => setViewRecord(record)} onDelete={() => setDeleteRecord(record)} />)}
+      {records.map((record, index) => <TransactionCard key={record._id} record={record} owner={owner} index={index} onView={() => setViewRecord(record)} onEdit={() => setEditRecord(record)} onDelete={() => setDeleteRecord(record)} />)}
     </div>}
     {totalPages > 1 && <div className="flex justify-center gap-2 rounded-xl border border-[#d2d2d5] bg-white p-3"><Btn variant="outline" disabled={page === 1} onClick={() => loadRecords(page - 1)}><ChevronLeft className="h-4 w-4" /></Btn><span className="py-2 text-sm">Page {page} of {totalPages}</span><Btn variant="outline" disabled={page === totalPages} onClick={() => loadRecords(page + 1)}><ChevronRight className="h-4 w-4" /></Btn></div>}
-    <ArbitroModal open={showModal} onClose={() => setShowModal(false)} token={token} onSaved={() => { setShowModal(false); loadRecords(1); }} />
+    <ArbitroModal key={showModal ? "new-open" : "new-closed"} open={showModal} onClose={() => setShowModal(false)} token={token} onSaved={() => { setShowModal(false); loadRecords(1); }} />
+    <ArbitroModal key={editRecord?._id || "no-record-edit"} open={!!editRecord} record={editRecord} onClose={() => setEditRecord(null)} token={token} onSaved={() => { setEditRecord(null); loadRecords(page); }} />
+    <ArbitroModal key={editDraft?._id || "no-draft-edit"} open={!!editDraft} draft={editDraft} onClose={() => setEditDraft(null)} token={token} onSaved={() => { setEditDraft(null); loadRecords(page); }} />
     <Modal open={!!viewRecord} onClose={() => setViewRecord(null)} title="Arbitro transaction details" size="xl">
       {viewRecord && <div className="space-y-5">
         <div className="grid gap-4 rounded-2xl border border-[#dedee2] bg-white p-4 md:grid-cols-[1fr_1.5fr]">
-          <div><Badge color={viewRecord.netProfit >= 0 ? "green" : "red"}>{viewRecord.netProfit >= 0 ? "Profitable transaction" : "Transaction loss"}</Badge><p className="mt-4 text-xs font-700 uppercase tracking-[.12em] text-[#9a9ba0]">Net result</p><p className={cn("mt-1 text-3xl font-700", viewRecord.netProfit >= 0 ? "text-[#3e8a4a]" : "text-[#be5151]")}>{fmtCurrency(viewRecord.netProfit)}</p><p className="mt-2 text-sm text-[#88898f]">Remitted versus sold INR and final profit.</p></div>
+          <div><div className="flex flex-wrap items-center gap-2"><Badge color={viewRecord.netProfit >= 0 ? "green" : "red"}>{viewRecord.netProfit >= 0 ? "Profitable transaction" : "Transaction loss"}</Badge>{viewRecord.canEdit && <Btn type="button" variant="outline" onClick={() => { setEditRecord(viewRecord); setViewRecord(null); }} className="gap-2"><Pencil className="h-4 w-4" />Edit</Btn>}</div><p className="mt-4 text-xs font-700 uppercase tracking-[.12em] text-[#9a9ba0]">Net result</p><p className={cn("mt-1 text-3xl font-700", viewRecord.netProfit >= 0 ? "text-[#3e8a4a]" : "text-[#be5151]")}>{fmtCurrency(viewRecord.netProfit)}</p><p className="mt-2 text-sm text-[#88898f]">Remitted versus sold INR and final profit.</p></div>
           <TransactionChart record={viewRecord} />
         </div>
         <DetailGrid columns={4} items={[
@@ -335,5 +405,6 @@ export default function ArbitroPage({ token }) {
       </div>}
     </Modal>
     <ConfirmModal open={!!deleteRecord} onClose={() => setDeleteRecord(null)} onConfirm={remove} loading={deleting} title="Delete arbitro transaction?" description="This permanently removes the transaction and its full tally." confirmText="Delete" confirmVariant="danger" />
+    <ConfirmModal open={!!deleteDraft} onClose={() => setDeleteDraft(null)} onConfirm={removeDraft} loading={deleting} title="Delete arbitro draft?" description="This permanently removes the saved draft for everyone who can access it." confirmText="Delete draft" confirmVariant="danger" />
   </div>;
 }

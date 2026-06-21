@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Menu, X, Bell, LogOut, LayoutGrid, FileText, Wallet, LineChart, Search, Users } from "lucide-react";
+import { Menu, X, Bell, LogOut, LayoutGrid, FileText, Wallet, WalletCards, LineChart, Search, Users } from "lucide-react";
 import { api } from "@/lib/api";
 import { cn, fmtDateTime, fmtCurrency } from "@/lib/utils";
 import { BrandHeader, Btn, Spinner } from "../ui/SharedComponents";
@@ -152,6 +152,7 @@ export default function DashboardLayout({ children, user, token, activeSection, 
     { id: "documents", label: "Documents", icon: <FileText className="h-4 w-4" /> },
     { id: "finance", label: "Finance", icon: <Wallet className="h-4 w-4" /> },
     { id: "arbitro", label: "Arbitro", icon: <LineChart className="h-4 w-4" /> },
+    { id: "remitBalance", label: "RemitBalance", icon: <WalletCards className="h-4 w-4" /> },
   ];
   const initials = user?.name ? user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) : "U";
 

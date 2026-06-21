@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import DashboardLayout from "./DashboardLayout";
 import { ToasterProvider, Spinner } from "../ui/SharedComponents";
 
-const paths = { home: "/dashboard", documents: "/dashboard/documents", finance: "/dashboard/finance", arbitro: "/dashboard/arbitro" };
+const paths = { home: "/dashboard", documents: "/dashboard/documents", finance: "/dashboard/finance", arbitro: "/dashboard/arbitro", remitBalance: "/dashboard/remit-balance" };
 
 export default function DashboardPageShell({ activeSection, children }) {
   const router = useRouter();

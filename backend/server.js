@@ -206,6 +206,7 @@ const arbitroSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   date: { type: Date, default: Date.now },
   remittancePlatform: { type: String, default: "" },
+  remitPersonId: { type: mongoose.Schema.Types.ObjectId, ref: "RemitPerson", default: null },
   personName: { type: String, default: "" },
   remittedBankPlatform: { type: String, default: "" },
   volume: { type: Number, required: true },
@@ -246,6 +247,40 @@ const arbitroSchema = new mongoose.Schema({
 });
 
 const Arbitro = mongoose.model("Arbitro", arbitroSchema);
+
+const arbitroDraftSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  data: { type: mongoose.Schema.Types.Mixed, default: {} },
+  visibleToAll: { type: Boolean, default: true },
+  visibleToUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+const ArbitroDraft = mongoose.model("ArbitroDraft", arbitroDraftSchema);
+
+const REMITTANCE_PLATFORMS = ["Western Union", "DBS", "IndusInd", "Niyo Global"];
+const remittanceLimit = (platform) => platform === "Western Union" ? 800000 : 1000000;
+const fiscalYearRange = (value = new Date()) => {
+  const date = new Date(value);
+  const year = date.getUTCMonth() >= 3 ? date.getUTCFullYear() : date.getUTCFullYear() - 1;
+  return {
+    start: new Date(Date.UTC(year, 3, 1)),
+    end: new Date(Date.UTC(year + 1, 3, 1)),
+    label: `${year}-${String(year + 1).slice(-2)}`,
+  };
+};
+
+const remitPersonSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  name: { type: String, required: true, trim: true },
+  nameKey: { type: String, required: true },
+  platforms: [{ type: String, enum: REMITTANCE_PLATFORMS }],
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+});
+remitPersonSchema.index({ userId: 1, nameKey: 1 }, { unique: true });
+const RemitPerson = mongoose.model("RemitPerson", remitPersonSchema);
 
 // Email Transporter
 const transporter = nodemailer.createTransport({
@@ -713,7 +748,193 @@ app.post("/api/finance/withdrawal", authMiddleware, upload.single("attachment"),
   }
 });
 
+// ==================== REMIT BALANCE ROUTES ====================
+
+const remitPeopleWithBalances = async (userId, at = new Date()) => {
+  const period = fiscalYearRange(at);
+  const people = await RemitPerson.find({ userId }).sort({ createdAt: -1 }).lean();
+  const personIds = people.map((person) => person._id);
+  const usage = personIds.length ? await Arbitro.aggregate([
+    { $match: {
+      userId: new mongoose.Types.ObjectId(String(userId)),
+      remitPersonId: { $in: personIds },
+      date: { $gte: period.start, $lt: period.end },
+    } },
+    { $group: { _id: { personId: "$remitPersonId", platform: "$remittancePlatform" }, used: { $sum: "$volume" }, transactions: { $sum: 1 } } },
+  ]) : [];
+  const usageMap = new Map(usage.map((item) => [`${item._id.personId}:${item._id.platform}`, item]));
+
+  return {
+    period,
+    people: people.map((person) => ({
+      ...person,
+      platformBalances: person.platforms.map((platform) => {
+        const item = usageMap.get(`${person._id}:${platform}`);
+        const limit = remittanceLimit(platform);
+        const used = Number(item?.used || 0);
+        return { platform, limit, used, remaining: Math.max(0, limit - used), transactions: item?.transactions || 0 };
+      }),
+    })),
+  };
+};
+
+app.get("/api/remit-balance", authMiddleware, async (req, res) => {
+  try {
+    const { people, period } = await remitPeopleWithBalances(req.user._id);
+    const totals = people.flatMap((person) => person.platformBalances).reduce((sum, item) => ({
+      limit: sum.limit + item.limit,
+      used: sum.used + item.used,
+      remaining: sum.remaining + item.remaining,
+      platforms: sum.platforms + 1,
+    }), { limit: 0, used: 0, remaining: 0, platforms: 0 });
+    res.json({ success: true, people, stats: { ...totals, people: people.length }, fiscalYear: period.label, resetsAt: period.end });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.post("/api/remit-balance", authMiddleware, async (req, res) => {
+  try {
+    const name = String(req.body.name || "").trim();
+    const platforms = Array.isArray(req.body.platforms) ? req.body.platforms : [];
+    const platformCount = Number(req.body.platformCount);
+    const uniquePlatforms = [...new Set(platforms)];
+    if (!name) return res.status(400).json({ success: false, message: "Person name is required" });
+    if (!Number.isInteger(platformCount) || platformCount < 1 || platformCount > 6 || uniquePlatforms.length !== platformCount)
+      return res.status(400).json({ success: false, message: "Select the requested number of unique platforms (maximum 6)" });
+    if (uniquePlatforms.some((platform) => !REMITTANCE_PLATFORMS.includes(platform)))
+      return res.status(400).json({ success: false, message: "Invalid remittance platform" });
+
+    const person = await RemitPerson.create({
+      userId: req.user._id,
+      name,
+      nameKey: name.toLocaleLowerCase(),
+      platforms: uniquePlatforms,
+    });
+    res.status(201).json({ success: true, person });
+  } catch (err) {
+    if (err?.code === 11000) return res.status(409).json({ success: false, message: "A person with this name already exists" });
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.put("/api/remit-balance/:id", authMiddleware, async (req, res) => {
+  try {
+    const person = await RemitPerson.findOne({ _id: req.params.id, userId: req.user._id });
+    if (!person) return res.status(404).json({ success: false, message: "Person not found" });
+
+    const name = String(req.body.name || "").trim();
+    const platforms = Array.isArray(req.body.platforms) ? req.body.platforms : [];
+    const platformCount = Number(req.body.platformCount);
+    const uniquePlatforms = [...new Set(platforms)];
+    if (!name) return res.status(400).json({ success: false, message: "Person name is required" });
+    if (!Number.isInteger(platformCount) || platformCount < 1 || platformCount > 6 || uniquePlatforms.length !== platformCount)
+      return res.status(400).json({ success: false, message: "Select the requested number of unique platforms (maximum 6)" });
+    if (uniquePlatforms.some((platform) => !REMITTANCE_PLATFORMS.includes(platform)))
+      return res.status(400).json({ success: false, message: "Invalid remittance platform" });
+
+    const removedPlatforms = person.platforms.filter((platform) => !uniquePlatforms.includes(platform));
+    if (removedPlatforms.length) {
+      const linked = await Arbitro.exists({ userId: req.user._id, remitPersonId: person._id, remittancePlatform: { $in: removedPlatforms } });
+      if (linked) return res.status(409).json({ success: false, message: "A platform with linked Arbitro transactions cannot be removed" });
+    }
+
+    person.name = name;
+    person.nameKey = name.toLocaleLowerCase();
+    person.platforms = uniquePlatforms;
+    person.updatedAt = new Date();
+    await person.save();
+    await Arbitro.updateMany({ userId: req.user._id, remitPersonId: person._id }, { $set: { personName: name } });
+    res.json({ success: true, person });
+  } catch (err) {
+    if (err?.code === 11000) return res.status(409).json({ success: false, message: "A person with this name already exists" });
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.delete("/api/remit-balance/:id", authMiddleware, async (req, res) => {
+  try {
+    const linked = await Arbitro.exists({ userId: req.user._id, remitPersonId: req.params.id });
+    if (linked) return res.status(409).json({ success: false, message: "This person has linked Arbitro transactions and cannot be deleted" });
+    const person = await RemitPerson.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    if (!person) return res.status(404).json({ success: false, message: "Person not found" });
+    res.json({ success: true, message: "Person deleted" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 // ==================== ARBITRO ROUTES ====================
+
+app.get("/api/arbitro/drafts", authMiddleware, async (req, res) => {
+  try {
+    const drafts = await ArbitroDraft.find(getVisibleQuery(req.user._id))
+      .populate("userId", "name email")
+      .populate("updatedBy", "name email")
+      .sort({ updatedAt: -1 });
+    const editableDrafts = drafts.map((draft) => {
+      const value = draft.toObject();
+      value.canEdit = String(draft.userId?._id || draft.userId) === String(req.user._id) || draft.visibleToAll;
+      return value;
+    });
+    res.json({ success: true, drafts: editableDrafts });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.post("/api/arbitro/drafts", authMiddleware, async (req, res) => {
+  try {
+    const { data = {}, visibleToAll, visibleToUsers } = req.body;
+    const parsedVisibleUsers = Array.isArray(visibleToUsers) ? visibleToUsers : [];
+    const draft = await ArbitroDraft.create({
+      userId: req.user._id,
+      updatedBy: req.user._id,
+      data,
+      visibleToAll: visibleToAll === true || visibleToAll === "true",
+      visibleToUsers: parsedVisibleUsers,
+    });
+    res.status(201).json({ success: true, draft });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.put("/api/arbitro/drafts/:id", authMiddleware, async (req, res) => {
+  try {
+    const draft = await ArbitroDraft.findById(req.params.id);
+    if (!draft) return res.status(404).json({ success: false, message: "Draft not found" });
+    const owner = String(draft.userId) === String(req.user._id);
+    if (!owner && !draft.visibleToAll) return res.status(403).json({ success: false, message: "You cannot edit this draft" });
+    draft.data = req.body.data || {};
+    draft.updatedBy = req.user._id;
+    draft.updatedAt = new Date();
+    if (owner) {
+      draft.visibleToAll = req.body.visibleToAll === true || req.body.visibleToAll === "true";
+      draft.visibleToUsers = Array.isArray(req.body.visibleToUsers) ? req.body.visibleToUsers : [];
+    }
+    await draft.save();
+    res.json({ success: true, draft });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.delete("/api/arbitro/drafts/:id", authMiddleware, async (req, res) => {
+  try {
+    const draft = await ArbitroDraft.findById(req.params.id);
+    if (!draft) return res.status(404).json({ success: false, message: "Draft not found" });
+    const owner = String(draft.userId) === String(req.user._id);
+    if (!owner && !draft.visibleToAll) return res.status(403).json({ success: false, message: "You cannot delete this draft" });
+    await draft.deleteOne();
+    res.json({ success: true, message: "Draft deleted" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 app.get("/api/arbitro", authMiddleware, async (req, res) => {
   try {
@@ -733,7 +954,13 @@ app.get("/api/arbitro", authMiddleware, async (req, res) => {
       .skip((page - 1) * limit)
       .limit(Number(limit));
 
-    res.json({ success: true, records, total, totalPages: Math.ceil(total / limit) });
+    const editableRecords = records.map((record) => {
+      const value = record.toObject();
+      value.canEdit = String(record.userId?._id || record.userId) === String(req.user._id) || record.visibleToAll;
+      value.canDelete = String(record.userId?._id || record.userId) === String(req.user._id);
+      return value;
+    });
+    res.json({ success: true, records: editableRecords, total, totalPages: Math.ceil(total / limit) });
   } catch (err) {
     res.status(500).json({ success: false, message: "Server error" });
   }
@@ -743,11 +970,11 @@ app.post("/api/arbitro", authMiddleware, async (req, res) => {
   try {
     const {
       volume, euroRate, remittanceFees, date, notes, visibleToAll, visibleToUsers,
-      remittancePlatform, personName, remittedBankPlatform, usdcBuyingPlatform,
+      remittancePlatform, remitPersonId, remittedBankPlatform, usdcBuyingPlatform,
       usdcBuyingDate, usdcPurchases, usdtSellingAccountName, usdtSellingDate, usdtSales
     } = req.body;
 
-    if (!volume || !euroRate || !remittancePlatform || !personName || !remittedBankPlatform ||
+    if (!volume || !euroRate || !remittancePlatform || !remitPersonId || !remittedBankPlatform ||
         !usdcBuyingPlatform || !Array.isArray(usdcPurchases) || !usdcPurchases.length ||
         !usdtSellingAccountName || !Array.isArray(usdtSales) || !usdtSales.length)
       return res.status(400).json({ success: false, message: "Required fields missing" });
@@ -755,6 +982,41 @@ app.post("/api/arbitro", authMiddleware, async (req, res) => {
     const vol = Number(volume);
     const eurRate = Number(euroRate);
     const remFeesInr = Number(remittanceFees) || 0;
+    if (!Number.isFinite(vol) || vol <= 0 || !Number.isFinite(eurRate) || eurRate <= 0)
+      return res.status(400).json({ success: false, message: "Volume and EUR rate must be positive numbers" });
+
+    let sourceDraft = null;
+    let recordOwnerId = req.user._id;
+    if (req.body.sourceDraftId) {
+      sourceDraft = await ArbitroDraft.findById(req.body.sourceDraftId);
+      if (!sourceDraft || (String(sourceDraft.userId) !== String(req.user._id) && !sourceDraft.visibleToAll))
+        return res.status(403).json({ success: false, message: "You cannot publish this draft" });
+      recordOwnerId = sourceDraft.userId;
+    }
+
+    const remitPerson = await RemitPerson.findOne({ _id: remitPersonId, userId: recordOwnerId });
+    if (!remitPerson) return res.status(400).json({ success: false, message: "Select a valid RemitBalance person" });
+    if (!remitPerson.platforms.includes(remittancePlatform))
+      return res.status(400).json({ success: false, message: `${remitPerson.name} does not have ${remittancePlatform} enabled` });
+
+    const transactionDate = date ? new Date(date) : new Date();
+    if (Number.isNaN(transactionDate.getTime())) return res.status(400).json({ success: false, message: "Invalid remitting date" });
+    const fiscalPeriod = fiscalYearRange(transactionDate);
+    const usedRows = await Arbitro.aggregate([
+      { $match: {
+        userId: new mongoose.Types.ObjectId(String(recordOwnerId)),
+        remitPersonId: remitPerson._id,
+        remittancePlatform,
+        date: { $gte: fiscalPeriod.start, $lt: fiscalPeriod.end },
+      } },
+      { $group: { _id: null, used: { $sum: "$volume" } } },
+    ]);
+    const used = Number(usedRows[0]?.used || 0);
+    const platformLimit = remittanceLimit(remittancePlatform);
+    if (used + vol > platformLimit) {
+      const remaining = Math.max(0, platformLimit - used);
+      return res.status(409).json({ success: false, message: `Only ₹${remaining.toLocaleString("en-IN")} remains for ${remitPerson.name} on ${remittancePlatform} in FY ${fiscalPeriod.label}` });
+    }
     const purchases = usdcPurchases.map((row) => ({
       rateEuro: Number(row.rateEuro), sellerName: String(row.sellerName || "").trim(),
       volumeEuro: Number(row.volumeEuro), usdcAmount: Number(row.volumeEuro) / Number(row.rateEuro),
@@ -783,13 +1045,18 @@ app.post("/api/arbitro", authMiddleware, async (req, res) => {
     const indiaTax = profitBeforeTax > 0 ? profitBeforeTax * 0.30 : 0;
     const netProfit = profitBeforeTax > 0 ? profitBeforeTax - (estoniaTax + indiaTax) : profitBeforeTax;
 
-    const parsedVisibleUsers = visibleToUsers ? (Array.isArray(visibleToUsers) ? visibleToUsers : JSON.parse(visibleToUsers)) : [];
+    const draftOwner = !sourceDraft || String(sourceDraft.userId) === String(req.user._id);
+    const parsedVisibleUsers = draftOwner
+      ? (visibleToUsers ? (Array.isArray(visibleToUsers) ? visibleToUsers : JSON.parse(visibleToUsers)) : [])
+      : sourceDraft.visibleToUsers;
+    const effectiveVisibleToAll = draftOwner ? (visibleToAll === true || visibleToAll === "true") : sourceDraft.visibleToAll;
 
     const record = await Arbitro.create({
-      userId: req.user._id,
-      date: date ? new Date(date) : new Date(),
+      userId: recordOwnerId,
+      date: transactionDate,
       remittancePlatform,
-      personName: String(personName).trim(),
+      remitPersonId: remitPerson._id,
+      personName: remitPerson.name,
       remittedBankPlatform: String(remittedBankPlatform).trim(),
       volume: vol,
       euroRate: eurRate,
@@ -813,7 +1080,7 @@ app.post("/api/arbitro", authMiddleware, async (req, res) => {
       indiaTax: +indiaTax.toFixed(2),
       netProfit: +netProfit.toFixed(2),
       notes: notes || "",
-      visibleToAll: visibleToAll === true || visibleToAll === "true",
+      visibleToAll: effectiveVisibleToAll,
       visibleToUsers: parsedVisibleUsers,
     });
 
@@ -834,7 +1101,101 @@ app.post("/api/arbitro", authMiddleware, async (req, res) => {
     // Append to Google Sheet asynchronously
     appendToGoogleSheet(record);
 
+    if (sourceDraft) await sourceDraft.deleteOne();
+
     res.status(201).json({ success: true, record });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+app.put("/api/arbitro/:id", authMiddleware, async (req, res) => {
+  try {
+    const record = await Arbitro.findById(req.params.id);
+    if (!record) return res.status(404).json({ success: false, message: "Record not found" });
+    const owner = String(record.userId) === String(req.user._id);
+    if (!owner && !record.visibleToAll) return res.status(403).json({ success: false, message: "You cannot edit this record" });
+
+    const {
+      volume, euroRate, remittanceFees, date, notes, visibleToAll, visibleToUsers,
+      remittancePlatform, remitPersonId, remittedBankPlatform, usdcBuyingPlatform,
+      usdcBuyingDate, usdcPurchases, usdtSellingAccountName, usdtSellingDate, usdtSales
+    } = req.body;
+    if (!volume || !euroRate || !remittancePlatform || !remitPersonId || !remittedBankPlatform ||
+        !usdcBuyingPlatform || !Array.isArray(usdcPurchases) || !usdcPurchases.length ||
+        !usdtSellingAccountName || !Array.isArray(usdtSales) || !usdtSales.length)
+      return res.status(400).json({ success: false, message: "Required fields missing" });
+
+    const vol = Number(volume), eurRate = Number(euroRate), remFeesInr = Number(remittanceFees) || 0;
+    if (!Number.isFinite(vol) || vol <= 0 || !Number.isFinite(eurRate) || eurRate <= 0)
+      return res.status(400).json({ success: false, message: "Volume and EUR rate must be positive numbers" });
+
+    const recordOwnerId = record.userId;
+    const remitPerson = await RemitPerson.findOne({ _id: remitPersonId, userId: recordOwnerId });
+    if (!remitPerson) return res.status(400).json({ success: false, message: "Select a valid RemitBalance person" });
+    if (!remitPerson.platforms.includes(remittancePlatform))
+      return res.status(400).json({ success: false, message: `${remitPerson.name} does not have ${remittancePlatform} enabled` });
+
+    const transactionDate = date ? new Date(date) : new Date();
+    if (Number.isNaN(transactionDate.getTime())) return res.status(400).json({ success: false, message: "Invalid remitting date" });
+    const fiscalPeriod = fiscalYearRange(transactionDate);
+    const usedRows = await Arbitro.aggregate([
+      { $match: {
+        _id: { $ne: record._id },
+        userId: new mongoose.Types.ObjectId(String(recordOwnerId)),
+        remitPersonId: remitPerson._id,
+        remittancePlatform,
+        date: { $gte: fiscalPeriod.start, $lt: fiscalPeriod.end },
+      } },
+      { $group: { _id: null, used: { $sum: "$volume" } } },
+    ]);
+    const used = Number(usedRows[0]?.used || 0), platformLimit = remittanceLimit(remittancePlatform);
+    if (used + vol > platformLimit) {
+      const remaining = Math.max(0, platformLimit - used);
+      return res.status(409).json({ success: false, message: `Only ₹${remaining.toLocaleString("en-IN")} remains for ${remitPerson.name} on ${remittancePlatform} in FY ${fiscalPeriod.label}` });
+    }
+
+    const purchases = usdcPurchases.map((row) => ({
+      rateEuro: Number(row.rateEuro), sellerName: String(row.sellerName || "").trim(),
+      volumeEuro: Number(row.volumeEuro), usdcAmount: Number(row.volumeEuro) / Number(row.rateEuro),
+    }));
+    const sales = usdtSales.map((row) => {
+      const rateInr = Number(row.rateInr);
+      const usdtAmount = Number(row.usdtAmount) || (Number(row.volumeInr) / rateInr);
+      return { rateInr, buyerName: String(row.buyerName || "").trim(), usdtAmount, volumeInr: +(usdtAmount * rateInr).toFixed(2) };
+    });
+    if (purchases.some((row) => !row.rateEuro || !row.sellerName || !row.volumeEuro) ||
+        sales.some((row) => !row.rateInr || !row.buyerName || !row.usdtAmount || !row.volumeInr))
+      return res.status(400).json({ success: false, message: "Complete every purchase and sale row" });
+
+    const totalEuro = vol / eurRate, remFeesEuro = remFeesInr / eurRate, euroAfterFees = totalEuro - remFeesEuro;
+    const usdtReceived = purchases.reduce((sum, row) => sum + row.usdcAmount, 0);
+    const totalAmountInr = sales.reduce((sum, row) => sum + row.volumeInr, 0);
+    const profitBeforeTax = totalAmountInr - vol;
+    const estoniaTax = profitBeforeTax > 0 ? profitBeforeTax * .2 : 0, indiaTax = profitBeforeTax > 0 ? profitBeforeTax * .3 : 0;
+    const netProfit = profitBeforeTax > 0 ? profitBeforeTax - estoniaTax - indiaTax : profitBeforeTax;
+    const parsedVisibleUsers = Array.isArray(visibleToUsers) ? visibleToUsers : [];
+
+    Object.assign(record, {
+      date: transactionDate, remittancePlatform, remitPersonId: remitPerson._id, personName: remitPerson.name,
+      remittedBankPlatform: String(remittedBankPlatform).trim(), volume: vol, euroRate: eurRate,
+      remittanceFees: remFeesInr, totalEuroBeforeFees: +totalEuro.toFixed(4), remittanceFeesEuro: +remFeesEuro.toFixed(4),
+      totalReceivedEuro: +euroAfterFees.toFixed(4), usdtPurchaseRateEuro: purchases[0].rateEuro,
+      usdtReceived: +usdtReceived.toFixed(4), usdtSellingRateInr: sales[0].rateInr, usdcBuyingPlatform,
+      bankUsedForBuying: String(remittedBankPlatform).trim(), usdcBuyingDate: usdcBuyingDate ? new Date(usdcBuyingDate) : new Date(),
+      usdcPurchases: purchases, usdtSellingAccountName: String(usdtSellingAccountName).trim(),
+      usdtSellingDate: usdtSellingDate ? new Date(usdtSellingDate) : new Date(), usdtSales: sales,
+      totalAmountInr: +totalAmountInr.toFixed(2), profitBeforeTax: +profitBeforeTax.toFixed(2),
+      estoniaTax: +estoniaTax.toFixed(2), indiaTax: +indiaTax.toFixed(2), netProfit: +netProfit.toFixed(2), notes: notes || "",
+    });
+    if (owner) {
+      record.visibleToAll = visibleToAll === true || visibleToAll === "true";
+      record.visibleToUsers = parsedVisibleUsers;
+    }
+    await record.save();
+    await addNotification(record.userId, `${req.user.name} updated an Arbitro transaction`, "info", "arbitro", record._id);
+    res.json({ success: true, record });
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error" });
