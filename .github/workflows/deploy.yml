@@ -1,0 +1,97 @@
+name: Deploy Nexarrow to AWS
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+concurrency:
+  group: nexarrow-production-deployment
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Add EC2 host key
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_PORT: ${{ secrets.AWS_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${AWS_PORT:-22}" -H "$AWS_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Configure SSH key
+        env:
+          AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
+        run: |
+          printf '%s\n' "$AWS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Deploy application
+        env:
+          AWS_HOST: ${{ secrets.AWS_HOST }}
+          AWS_USER: ${{ secrets.AWS_USER }}
+          AWS_PORT: ${{ secrets.AWS_PORT }}
+        run: |
+          ssh \
+            -i ~/.ssh/deploy_key \
+            -p "${AWS_PORT:-22}" \
+            "$AWS_USER@$AWS_HOST" << 'DEPLOY_SCRIPT'
+
+          set -e
+
+          APP_DIR="$HOME/apps/nexarrow"
+
+          echo "Starting Nexarrow deployment..."
+
+          cd "$APP_DIR"
+
+          echo "Fetching latest source..."
+          git fetch origin main
+          git reset --hard origin/main
+
+          echo "Installing backend dependencies..."
+          cd "$APP_DIR/backend"
+          npm ci --omit=dev
+
+          echo "Restarting backend..."
+          if pm2 describe backend >/dev/null 2>&1; then
+            pm2 restart backend --update-env
+          elif pm2 describe 0 >/dev/null 2>&1; then
+            pm2 restart 0 --update-env
+          else
+            echo "Backend PM2 process was not found."
+            exit 1
+          fi
+
+          echo "Installing frontend dependencies..."
+          cd "$APP_DIR/frontend"
+          npm ci
+
+          echo "Building frontend..."
+          rm -rf .next
+          npm run build
+
+          echo "Restarting frontend..."
+          if pm2 describe frontend >/dev/null 2>&1; then
+            pm2 restart frontend --update-env
+          elif pm2 describe 1 >/dev/null 2>&1; then
+            pm2 restart 1 --update-env
+          else
+            echo "Frontend PM2 process was not found."
+            exit 1
+          fi
+
+          pm2 save
+          pm2 status
+
+          echo "Deployment completed successfully."
+
+          DEPLOY_SCRIPT
