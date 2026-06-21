@@ -43,8 +43,7 @@ jobs:
           ssh \
             -i ~/.ssh/deploy_key \
             -p "${AWS_PORT:-22}" \
-            "$AWS_USER@$AWS_HOST" << 'DEPLOY_SCRIPT'
-
+            "$AWS_USER@$AWS_HOST" 'bash -s' <<'DEPLOY_SCRIPT'
           set -e
 
           APP_DIR="$HOME/apps/nexarrow"
@@ -62,14 +61,7 @@ jobs:
           npm ci --omit=dev
 
           echo "Restarting backend..."
-          if pm2 describe backend >/dev/null 2>&1; then
-            pm2 restart backend --update-env
-          elif pm2 describe 0 >/dev/null 2>&1; then
-            pm2 restart 0 --update-env
-          else
-            echo "Backend PM2 process was not found."
-            exit 1
-          fi
+          pm2 restart backend --update-env
 
           echo "Installing frontend dependencies..."
           cd "$APP_DIR/frontend"
@@ -80,18 +72,10 @@ jobs:
           npm run build
 
           echo "Restarting frontend..."
-          if pm2 describe frontend >/dev/null 2>&1; then
-            pm2 restart frontend --update-env
-          elif pm2 describe 1 >/dev/null 2>&1; then
-            pm2 restart 1 --update-env
-          else
-            echo "Frontend PM2 process was not found."
-            exit 1
-          fi
+          pm2 restart frontend --update-env
 
           pm2 save
           pm2 status
 
           echo "Deployment completed successfully."
-
-          DEPLOY_SCRIPTgit commit -m "Add AWS CI/CD deployment workflow"
+          DEPLOY_SCRIPT
