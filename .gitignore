@@ -1,7 +1,5 @@
-
-backend/arbitrage.json
-
-backend/arbitrage.json
-
+backend/.env
 backend/arbitrage.json
 backend/uploads/
+backend/vectors/
+frontend/.env.production

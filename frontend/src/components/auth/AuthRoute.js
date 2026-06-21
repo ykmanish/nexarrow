@@ -10,10 +10,11 @@ import ForgotPasswordPage from "./ForgotPasswordPage";
 import ResetPasswordPage from "./ResetPasswordPage";
 import { RECAPTCHA_SITE_KEY } from "@/lib/api";
 
-export default function AuthRoute({ page }) {
+export default function AuthRoute({ page }) {mkdir .github
+
   const router = useRouter();
   useEffect(() => {
-    if (!RECAPTCHA_SITE_KEY || RECAPTCHA_SITE_KEY === "YOUR_SITE_KEY" || document.querySelector("script[data-nexarrow-recaptcha]")) return;
+    if (!RECAPTCHA_SITE_KEY || RECAPTCHA_SITE_KEY === "6Lfn2istAAAAAHloHolw03qmIy96Mjxl6kEhl0r1" || document.querySelector("script[data-nexarrow-recaptcha]")) return;
     const script = document.createElement("script");
     script.src = `https://www.google.com/recaptcha/api.js?render=${RECAPTCHA_SITE_KEY}`;
     script.async = true;

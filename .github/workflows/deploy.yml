@@ -94,4 +94,4 @@ jobs:
 
           echo "Deployment completed successfully."
 
-          DEPLOY_SCRIPT
+          DEPLOY_SCRIPTgit commit -m "Add AWS CI/CD deployment workflow"
